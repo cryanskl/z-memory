@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 保存为 ~/Library/LaunchAgents/com.zenith.memory-nightly.plist，把 YOUR_USER 换成你的用户名。
+     PATH 里要有 claude 命令所在的目录。图形界面的向导能按你机器上的实际路径生成这个文件。 -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.zenith.memory-nightly</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/YOUR_USER/memory/scripts/nightly.py</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>23</integer>
+    <key>Minute</key><integer>30</integer>
+  </dict>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/Users/YOUR_USER/.local/bin</string>
+  </dict>
+  <key>StandardOutPath</key><string>/tmp/memory-nightly.out</string>
+  <key>StandardErrorPath</key><string>/tmp/memory-nightly.err</string>
+</dict>
+</plist>

@@ -1,0 +1,890 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="memory-token" content="__TOKEN__">
+<title>记忆系统</title>
+<style nonce="__NONCE__">
+:root {
+  --paper: #F3F5F8; --surface: #FFFFFF; --ink: #1B2430; --muted: #5C6878; --line: #D9DFE7;
+  --accent: #1F4E8C; --accent-soft: #E4ECF7; --good: #1E7B4B; --good-soft: #E2F2E8;
+  --bad: #B3261E; --bad-soft: #FBE6E4; --warn: #8A5A00; --warn-soft: #FBF0D9; --code: #EDF0F4;
+  --ui: -apple-system, "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+  --doc: "Songti SC", "STSong", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun", serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, "Noto Sans Mono CJK SC", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #11151B; --surface: #181D25; --ink: #E4E8EE; --muted: #96A2B2; --line: #2A323D;
+    --accent: #86B4F2; --accent-soft: #1D2A3D; --good: #62C48F; --good-soft: #16291F;
+    --bad: #F08A80; --bad-soft: #331B19; --warn: #E2B55E; --warn-soft: #2F2616; --code: #202733;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.6 var(--ui);
+  display: grid; grid-template-columns: 208px minmax(0, 1fr); }
+h1, h2, h3, p { margin: 0; }
+a { color: var(--accent); }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code, kbd, .mono { font-family: var(--mono); font-size: 12.5px; }
+code { background: var(--code); padding: 1px 5px; border-radius: 4px; }
+kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--surface); }
+
+/* 侧栏 */
+#rail { border-right: 1px solid var(--line); padding: 20px 0 16px; display: flex; flex-direction: column; height: 100vh; position: sticky; top: 0; }
+#rail .brand { font: 600 20px/1.3 var(--doc); padding: 0 20px 18px; }
+#rail a { display: flex; justify-content: space-between; align-items: center; padding: 8px 20px 8px 17px;
+  border-left: 3px solid transparent; color: var(--ink); text-decoration: none; }
+#rail a:hover { background: var(--accent-soft); }
+#rail a[aria-current="page"] { border-left-color: var(--ink); font-weight: 600; }
+#rail .count { font-size: 12.5px; color: var(--surface); background: var(--bad); border-radius: 9px; padding: 0 7px; line-height: 18px; }
+#rail .foot { margin-top: auto; padding: 0 20px; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+
+/* 通用 */
+main { min-width: 0; height: 100vh; overflow: auto; }
+.page { max-width: 1040px; padding: 28px 36px 64px; }
+.page > h1 { font: 600 26px/1.3 var(--doc); margin-bottom: 6px; }
+.page h2 { font-size: 16px; font-weight: 600; margin: 32px 0 10px; }
+.lede { color: var(--muted); max-width: 46em; }
+.muted { color: var(--muted); }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.gap { margin-top: 14px; }
+.btn { border: 1px solid var(--ink); background: var(--surface); border-radius: 6px; padding: 5px 14px; cursor: pointer; }
+.btn:hover { background: var(--accent-soft); }
+a.btn { text-decoration: none; display: inline-block; }
+.btn { white-space: nowrap; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.primary { background: var(--good); border-color: var(--good); color: var(--surface); font-weight: 600; }
+.btn.danger { border-color: var(--bad); color: var(--bad); }
+.btn.armed { background: var(--bad); border-color: var(--bad); color: var(--surface); }
+.btn.quiet { border-color: var(--line); }
+.btn.small { padding: 2px 10px; font-size: 12.5px; }
+input[type=text], input[type=number], input[type=search], select, textarea {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 5px 9px; }
+textarea { width: 100%; font: 12.5px/1.6 var(--mono); resize: vertical; }
+.chip { display: inline-block; font-size: 12px; line-height: 18px; padding: 0 7px; border-radius: 4px;
+  background: var(--code); color: var(--muted); white-space: nowrap; }
+.chip.new { background: var(--accent-soft); color: var(--accent); }
+.chip.warn { background: var(--warn-soft); color: var(--warn); }
+.chip.bad { background: var(--bad-soft); color: var(--bad); }
+.chip.good { background: var(--good-soft); color: var(--good); }
+.note { border-left: 3px solid var(--line); padding: 8px 14px; margin: 12px 0; background: var(--surface); max-width: 60em; }
+.note.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+.note.bad { border-left-color: var(--bad); background: var(--bad-soft); }
+.note.good { border-left-color: var(--good); background: var(--good-soft); }
+.note pre { background: none; padding: 0; }
+.scroll { overflow-x: auto; }
+.scroll td { white-space: nowrap; }
+table { border-collapse: collapse; width: 100%; }
+th { text-align: left; font-weight: 400; font-size: 12.5px; color: var(--muted); padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 7px 12px 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.path { font-family: var(--mono); font-size: 12.5px; overflow-wrap: anywhere; }
+pre { margin: 0; font: 12.5px/1.65 var(--mono); background: var(--code); border-radius: 6px; padding: 12px 14px;
+  white-space: pre-wrap; overflow-wrap: anywhere; }
+pre.out { margin-top: 10px; max-height: 420px; overflow: auto; }
+.log div { display: grid; grid-template-columns: 9.5em 5.5em 1fr; gap: 8px; }
+.log .lv-WARN, .log .lv-AUDIT, .log .lv-SKIP { color: var(--warn); }
+.log .lv-ERROR, .log .lv-FATAL { color: var(--bad); }
+.log .lv-SUMMARY { font-weight: 600; }
+.log .lv-PENDING { color: var(--good); }
+
+/* 两栏：列表 + 阅读 */
+.split { display: grid; grid-template-columns: 340px minmax(0, 1fr); height: 100vh; }
+.list { border-right: 1px solid var(--line); overflow: auto; }
+.list header { position: sticky; top: 0; background: var(--paper); padding: 18px 16px 10px; border-bottom: 1px solid var(--line); z-index: 1; }
+.list header h1 { font: 600 20px/1.3 var(--doc); }
+.list .filters { display: grid; gap: 8px; margin-top: 10px; }
+.list .group { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 4px; font-size: 12.5px; color: var(--muted); }
+.item { display: block; width: 100%; text-align: left; background: none; border: 0; border-left: 3px solid transparent;
+  border-bottom: 1px solid var(--line); padding: 10px 16px 10px 13px; cursor: pointer; }
+.item:hover { background: var(--accent-soft); }
+.item[aria-selected="true"] { background: var(--surface); border-left-color: var(--ink); }
+.item .t { display: block; font-weight: 600; }
+.item .s { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 5px; align-items: center; font-size: 12.5px; color: var(--muted); }
+.item .snip { display: block; margin-top: 4px; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.reader { overflow: auto; display: flex; flex-direction: column; min-width: 0; }
+.reader .inner { padding: 22px 36px 28px; flex: 1; }
+.tabs { display: flex; gap: 18px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
+.tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 4px 0 7px; cursor: pointer; color: var(--muted); }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); font-weight: 600; }
+.bar { position: sticky; bottom: 0; background: var(--paper); border-top: 1px solid var(--line); padding: 12px 36px; }
+.bar .keys { margin-left: auto; font-size: 12.5px; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; }
+.empty { padding: 72px 36px; color: var(--muted); max-width: 40em; }
+.empty h2 { font: 600 20px/1.4 var(--doc); color: var(--ink); margin: 0 0 8px; }
+
+/* 一条笔记：一页纸 */
+.sheet { background: var(--surface); border: 1px solid var(--line); border-radius: 2px; padding: 34px 44px 38px; max-width: 47em; }
+.sheet h2.title { font: 700 25px/1.4 var(--doc); margin: 0 0 10px; }
+.sheet .facts { display: flex; gap: 8px 14px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--muted);
+  padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.prose { font: 16.5px/1.85 var(--doc); }
+.prose h3 { font: 600 14px/1.6 var(--ui); color: var(--muted); margin: 22px 0 4px; }
+.prose p { white-space: pre-line; margin: 0 0 10px; }
+.prose ul { margin: 0 0 10px; padding-left: 1.3em; }
+.prose pre { margin: 0 0 10px; }
+.prose code { font-size: 14px; }
+.fields { margin-top: 26px; font-size: 13px; max-width: 47em; }
+.fields summary { cursor: pointer; color: var(--muted); padding: 4px 0; }
+.fields th { width: 9em; vertical-align: top; white-space: nowrap; }
+.fields td { overflow-wrap: anywhere; }
+.fields td.tip { width: 42%; color: var(--muted); }
+.ev { border-bottom: 1px solid var(--line); padding: 8px 0; }
+.ev .where { font-family: var(--mono); font-size: 12.5px; overflow-wrap: anywhere; }
+.ev pre { margin-top: 8px; }
+.ev .ln { color: var(--muted); }
+.diff span { display: block; }
+.diff .add { background: var(--good-soft); color: var(--good); }
+.diff .del { background: var(--bad-soft); color: var(--bad); }
+.diff .hunk { color: var(--accent); }
+
+/* 向导 */
+.steps button { display: flex; gap: 10px; align-items: baseline; }
+.steps .no { font-variant-numeric: tabular-nums; color: var(--muted); }
+.mark { margin-left: auto; font-size: 12.5px; }
+.mark.ok { color: var(--good); } .mark.todo { color: var(--muted); }
+.proj { border: 0; border-top: 1px solid var(--line); margin: 0; padding: 14px 0 16px; }
+.proj-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 12px; margin-bottom: 10px; }
+.field { display: grid; gap: 3px; font-size: 12.5px; color: var(--muted); }
+.field.wide { grid-column: 1 / -1; } .field.half { grid-column: span 2; }
+.field input, .field select { width: 100%; color: var(--ink); font-size: 14px; }
+.copy { position: relative; margin: 8px 0 18px; max-width: 60em; }
+.copy .btn { position: absolute; top: 8px; right: 8px; }
+.copy pre { padding-right: 76px; }
+
+#toast { position: fixed; right: 24px; top: 16px; background: var(--ink); color: var(--paper);
+  padding: 8px 16px; border-radius: 6px; max-width: min(80vw, 34em); display: none; z-index: 10; }
+#toast.show { display: block; }
+#toast.bad { background: var(--bad); color: #fff; }
+
+@media (max-width: 900px) {
+  body { grid-template-columns: 1fr; }
+  #rail { height: auto; position: static; flex-direction: row; flex-wrap: wrap; padding: 8px; border-right: 0; border-bottom: 1px solid var(--line); }
+  #rail .brand, #rail .foot { display: none; }
+  #rail a { border-left: 0; border-bottom: 3px solid transparent; padding: 6px 10px; gap: 6px; }
+  #rail a[aria-current="page"] { border-bottom-color: var(--ink); }
+  main, .split { height: auto; }
+  .split { grid-template-columns: 1fr; }
+  .list { border-right: 0; max-height: 44vh; }
+  .page, .reader .inner { padding: 18px 16px 40px; }
+  .sheet { padding: 22px 18px; }
+  .bar { padding: 10px 16px; }
+}
+@media (prefers-reduced-motion: no-preference) { .item, .btn { transition: background-color .12s; } }
+</style>
+</head>
+<body>
+<nav id="rail" aria-label="主导航">
+  <div class="brand">记忆系统</div>
+  <a href="#/overview" data-view="overview">总览</a>
+  <a href="#/review" data-view="review"><span>审批</span><span class="count" id="queue" hidden></span></a>
+  <a href="#/notes" data-view="notes">笔记</a>
+  <a href="#/run" data-view="run">运行</a>
+  <a href="#/setup" data-view="setup">向导</a>
+  <div class="foot"><div id="where"></div><div>只在这台电脑上运行，关掉终端里的 gui.py 就停了。</div></div>
+</nav>
+<main id="view"></main>
+<div id="toast" role="status"></div>
+
+<script nonce="__NONCE__">
+'use strict';
+const TOKEN = document.querySelector('meta[name=memory-token]').content;
+const main = document.getElementById('view');
+
+// ---------- 小工具 ----------
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v == null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else if (k === 'value') el.value = v;
+    else if (k === 'checked' || k === 'disabled' || k === 'open' || k === 'hidden') el[k] = true;
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  for (const kid of kids.flat(Infinity)) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : String(kid));
+  return el;
+}
+async function api(path, body) {
+  const opt = {headers: {'X-Memory-Token': TOKEN}};
+  if (body !== undefined) {
+    opt.method = 'POST';
+    opt.headers['Content-Type'] = 'application/json';
+    opt.body = JSON.stringify(body);
+  }
+  let res;
+  try { res = await fetch(path, opt); }
+  catch (e) { throw new Error('连不上本地服务。终端里的 gui.py 还在运行吗？'); }
+  const data = await res.json().catch(() => ({error: '服务返回了读不懂的内容'}));
+  if (!res.ok) throw new Error(data.error || `出错了（${res.status}）`);
+  return data;
+}
+const qs = obj => new URLSearchParams(obj).toString();
+let toastTimer;
+function toast(msg, bad) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (bad ? ' bad' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, bad ? 7000 : 2600);
+}
+const fail = e => toast(e.message, true);
+function btn(label, onclick, cls) { return h('button', {class: 'btn ' + (cls || ''), type: 'button', onclick}, label); }
+// 删除类的操作要按两次：第一次变成确认，几秒内不按就恢复
+function armed(label, confirm, action, cls) {
+  let timer = null;
+  const el = btn(label, () => {
+    if (timer) { clearTimeout(timer); timer = null; el.textContent = label; el.classList.remove('armed'); action(); return; }
+    el.textContent = confirm; el.classList.add('armed');
+    timer = setTimeout(() => { timer = null; el.textContent = label; el.classList.remove('armed'); }, 4000);
+  }, cls);
+  return el;
+}
+function copyBlock(text) {
+  const b = btn('复制', async () => {
+    try { await navigator.clipboard.writeText(text); b.textContent = '已复制'; setTimeout(() => { b.textContent = '复制'; }, 1500); }
+    catch (e) { toast('复制失败，请手动选中文字复制', true); }
+  }, 'small quiet');
+  return h('div', {class: 'copy'}, b, h('pre', null, text));
+}
+function tabs(names, current, pick) {
+  return h('div', {class: 'tabs', role: 'tablist'}, names.map(([key, label]) =>
+    h('button', {type: 'button', role: 'tab', 'aria-selected': String(key === current), onclick: () => pick(key)}, label)));
+}
+function logView(lines) {
+  return h('pre', {class: 'log out'}, lines.length ? lines.map(r =>
+    h('div', {class: 'lv-' + r.level}, h('span', null, r.at), h('span', null, r.level), h('span', null, r.text))) : '（没有内容）');
+}
+function outcome(o) {
+  const fixed = {filtered: '规则筛掉', triaged_out: '小模型判无', own: '脚本自己的会话', empty: '没有内容', retry: '等待重试'};
+  const m = /^pending=(\d+)$/.exec(o);
+  return m ? `产出 ${m[1]} 条` : (fixed[o] || o);
+}
+const STATUS = {current: '有效', superseded: '已被取代', archived: '已归档', active: '有效', '': '有效'};
+
+// ---------- 笔记的显示 ----------
+function inline(text) {
+  return text.split(/(`[^`\n]+`)/).map(p => p.length > 2 && p.startsWith('`') && p.endsWith('`') ? h('code', null, p.slice(1, -1)) : p);
+}
+function prose(md) {
+  const out = h('div', {class: 'prose'});
+  let para = [], list = null, code = null;
+  const flush = () => { if (para.length) { out.append(h('p', null, inline(para.join('\n')))); para = []; } };
+  for (const line of String(md || '').split('\n')) {
+    if (code) {
+      if (line.trim().startsWith('```')) { out.append(h('pre', null, code.join('\n'))); code = null; } else code.push(line);
+      continue;
+    }
+    if (line.trim().startsWith('```')) { flush(); list = null; code = []; continue; }
+    const head = /^#{1,4}\s+(.*)$/.exec(line);
+    if (head) { flush(); list = null; out.append(h('h3', null, head[1])); continue; }
+    const li = /^\s*(?:[-*]|\d+\.)\s+(.*)$/.exec(line);
+    if (li) { flush(); if (!list) { list = h('ul'); out.append(list); } list.append(h('li', null, inline(li[1]))); continue; }
+    if (!line.trim()) { flush(); list = null; continue; }
+    list = null; para.push(line);
+  }
+  if (code) out.append(h('pre', null, code.join('\n')));
+  flush();
+  return out;
+}
+function evidenceList(items) {
+  if (!items.length) return h('p', {class: 'muted'}, '这条笔记没有证据行号。');
+  return items.map(ev => {
+    const box = h('div');
+    const open = btn('看原文', async () => {
+      if (box.firstChild) { box.replaceChildren(); open.textContent = '看原文'; return; }
+      try {
+        const d = await api('/api/evidence?' + qs({entry: ev.entry}));
+        box.append(h('pre', null, d.lines.map(l => h('div', null, h('span', {class: 'ln'}, `L${l.no}  `), l.text)),
+          d.cut ? h('div', {class: 'ln'}, '（后面还有，只显示前 200 行）') : null));
+        open.textContent = '收起';
+      } catch (e) { fail(e); }
+    }, 'small quiet');
+    return h('div', {class: 'ev'},
+      h('div', {class: 'row'}, ev.problem ? h('span', {class: 'chip bad'}, ev.problem) : h('span', {class: 'chip good'}, '原文没变'), open),
+      h('div', {class: 'where'}, ev.entry), box);
+  });
+}
+function refLinks(refs) {
+  if (!refs || !refs.length) return '无';
+  return refs.map(r => h('div', null, r.at
+    ? h('a', {href: `#/notes/${encodeURIComponent(r.at.place)}/${encodeURIComponent(r.at.file)}`}, `${r.at.title}（${r.at.place_label}）`)
+    : h('span', {class: 'chip bad'}, '找不到这条笔记'), ' ', h('span', {class: 'mono muted'}, r.id)));
+}
+function sheet(d) {
+  const m = d.meta || {};
+  const facts = [
+    h('span', {class: 'chip' + (m.status && !['current', 'active'].includes(m.status) ? ' warn' : '')}, STATUS[m.status || ''] || m.status),
+    m.confidence ? h('span', {class: 'chip' + (m.confidence === 'low' ? ' warn' : '')}, m.confidence === 'low' ? '模型把握低' : '模型把握高') : null,
+    m.first_seen ? h('span', null, m.first_seen === m.last_seen ? m.first_seen : `${m.first_seen} 到 ${m.last_seen}`) : null,
+    m.project ? h('span', null, m.project) : null,
+    m.id ? h('span', {class: 'mono'}, m.id) : null,
+  ];
+  const rows = [
+    ['关键词', (m.keywords || []).map(k => [h('span', {class: 'chip'}, k), ' '])],
+    ['来源会话', (m.sources || []).map(s => h('div', {class: 'mono'}, s))],
+    ['会话所在分支', m.session_branch || '（会话里没有记录）'],
+    ['提炼时的 commit', m.distilled_at || ''],
+    ['发现于', m.found_at || ''], ['修复于', m.fixed_at || ''],
+    ['泛化自', d.refs ? refLinks(d.refs.derived_from) : (m.derived_from || []).join('，') || '无'],
+    ['取代了', d.refs ? refLinks(d.refs.supersedes) : (m.supersedes || []).join('，') || '无'],
+  ];
+  if (d.referenced_by && d.referenced_by.length) rows.push(['被这些笔记引用', d.referenced_by.map(r =>
+    h('div', null, h('a', {href: `#/notes/${encodeURIComponent(r.place)}/${encodeURIComponent(r.file)}`}, `${r.title}（${r.place_label}）`)))]);
+  if (m.base_hash) rows.push(['基于现有笔记的版本', m.base_hash]);
+  return [
+    h('article', {class: 'sheet'}, h('h2', {class: 'title'}, m.title || d.file), h('div', {class: 'facts'}, facts), prose(d.body)),
+    h('details', {class: 'fields', open: true}, h('summary', null, `证据（${(d.evidence || []).length} 处）`), evidenceList(d.evidence || [])),
+    h('details', {class: 'fields'}, h('summary', null, '头部的其他字段'),
+      h('table', null, rows.filter(r => r[1] !== '').map(([k, v]) => h('tr', null, h('th', null, k), h('td', null, v))))),
+  ];
+}
+function diffView(lines) {
+  return h('pre', {class: 'diff'}, lines.map(l => h('span', {class:
+    l.startsWith('@@') ? 'hunk' : l.startsWith('+') && !l.startsWith('+++') ? 'add' : l.startsWith('-') && !l.startsWith('---') ? 'del' : ''}, l || ' ')));
+}
+function editor(text, save, hint) {
+  const area = h('textarea', {rows: Math.min(40, Math.max(16, text.split('\n').length + 2)), spellcheck: 'false', 'aria-label': '笔记原文'});
+  area.value = text;
+  return h('div', null, h('p', {class: 'muted'}, hint), h('div', {class: 'gap'}, area),
+    h('div', {class: 'row gap'}, btn('保存修改', () => save(area.value)), btn('放弃修改', () => { area.value = text; }, 'quiet')));
+}
+
+// ---------- 总览 ----------
+const views = {};
+views.overview = {async mount(root) {
+  const d = await api('/api/overview');
+  setQueue(d.pending);
+  document.getElementById('where').textContent = d.memory;
+  const page = h('div', {class: 'page'});
+  page.append(h('h1', null, d.pending ? `有 ${d.pending} 条笔记等你审批` : '没有待审批的笔记'),
+    h('p', {class: 'lede'}, d.pending ? '批准之前，它们不会进入索引，也不会被任何指针读到。' : '每晚脚本跑完后，新提炼出的笔记会先出现在审批里。'),
+    h('div', {class: 'row gap'}, d.pending ? h('a', {class: 'btn primary', href: '#/review'}, '开始审批') : null,
+      h('a', {class: 'btn quiet', href: '#/run'}, '查看运行情况')));
+  if (!d.registered) page.append(h('div', {class: 'note warn'}, '注册表里还没有启用的项目，每晚脚本不会处理任何会话。', ' ', h('a', {href: '#/setup'}, '去向导里登记')));
+  else if (d.setup_done < d.setup_total) page.append(h('div', {class: 'note'}, `向导的 ${d.setup_total} 步里完成了 ${d.setup_done} 步。`, ' ', h('a', {href: '#/setup'}, '继续')));
+  if (d.running) page.append(h('div', {class: 'note warn'}, '每晚脚本正在运行。', ' ', h('a', {href: '#/run'}, '看进度')));
+  else if (d.busy) page.append(h('div', {class: 'note warn'}, '另一个记忆脚本正在写文件（多半是定时触发的每晚任务）。这期间批准、拒绝这些操作会提示稍后再试。'));
+
+  page.append(h('h2', null, '最近的运行'));
+  const cols = [['seen', '扫到', '这次看了多少段有变化的会话'], ['waiting', '还在进行', '太短或没有报错信号，但 24 小时内还有改动，下次再看'],
+    ['unregistered', '未登记', '工作目录不在注册表里的会话，补登记后自动处理'], ['filtered', '规则筛掉', '发言太少或没有报错信号'],
+    ['triaged_out', '小模型判无', '小模型认为没有值得记的 bug'], ['pending', '新增笔记', '这次放进待审批区的笔记'],
+    ['audit', '抽查', '从规则筛掉的会话里抽出来复核的段数'], ['audit_hit', '抽查命中', '复核发现其实有 bug。经常不是 0 说明规则太严'],
+    ['bg_cut', '背景截断', '之前的内容超过 4 万字，只带了开头和结尾'], ['errors', '出错', '处理失败的次数，详情在日志里'], ['queue', '待审批总数', '']];
+  if (d.runs.length) page.append(h('div', {class: 'scroll'}, h('table', null,
+    h('tr', null, h('th', null, '时间'), cols.map(c => h('th', {class: 'num', title: c[2]}, c[1]))),
+    d.runs.slice(0, 7).map(r => h('tr', null, h('td', null, r.at), cols.map(c =>
+      h('td', {class: 'num'}, c[0] === 'errors' && r.errors ? h('span', {class: 'chip bad'}, r.errors) : (r[c[0]] ?? ''))))))),
+    h('p', {class: 'muted gap'}, '鼠标停在列名上能看到它的意思。更早的记录在「运行」的日志里。'));
+  else page.append(h('p', {class: 'muted'}, '每晚脚本还没有跑过。可以在「运行」里手动跑一次。'));
+  if (d.events.length) page.append(h('h2', null, '最近一次运行里要留意的'), logView(d.events));
+
+  page.append(h('h2', null, '笔记放在哪'), h('table', null,
+    h('tr', null, h('th', null, '项目'), h('th', null, '位置'), h('th', {class: 'num'}, '已生效'), h('th', {class: 'num'}, '待审批'), h('th', null, '目录')),
+    d.shelves.map(s => h('tr', null,
+      h('td', null, s.key ? h('a', {href: '#/notes/' + encodeURIComponent(s.key)}, s.label) : s.label),
+      h('td', null, s.where === '项目仓库' ? h('span', {class: 'chip warn'}, '随项目仓库提交') : s.where),
+      h('td', {class: 'num'}, s.notes), h('td', {class: 'num'}, s.pending || ''), h('td', {class: 'path'}, s.dir)))));
+  root.replaceChildren(page);
+}};
+function setQueue(n) {
+  const el = document.getElementById('queue');
+  el.hidden = !n;
+  el.textContent = n || '';
+}
+
+// ---------- 审批 ----------
+views.review = (() => {
+  let rows = [], sel = null, tab = 'note', item = null, last = null, listEl, readEl;
+  const key = r => r.project + '/' + r.file;
+  const pick = r => { location.hash = `#/review/${encodeURIComponent(r.project)}/${encodeURIComponent(r.file)}`; };
+  async function load() {
+    rows = (await api('/api/pending')).rows;
+    setQueue(rows.length);
+  }
+  function flags(r) {
+    return [h('span', {class: 'chip ' + (r.kind === 'new' ? 'new' : 'warn')}, r.kind === 'new' ? '新建' : '更新'),
+      r.confidence === 'low' ? h('span', {class: 'chip warn'}, '把握低') : null,
+      r.stale ? h('span', {class: 'chip bad'}, '现有笔记已变') : null,
+      r.secrets.length ? h('span', {class: 'chip bad'}, '疑似含密钥') : null,
+      r.faults.length ? h('span', {class: 'chip bad'}, '头部有问题') : null];
+  }
+  function drawList() {
+    const kids = [h('header', null, h('h1', null, `待审批 ${rows.length} 条`))];
+    let project = null;
+    for (const r of rows) {
+      if (r.project !== project) {
+        project = r.project;
+        const p = project, n = rows.filter(x => x.project === p).length;
+        kids.push(h('div', {class: 'group'}, h('span', null, `${p}（${n}）`),
+          n > 1 ? armed('全部批准', `确认批准这 ${n} 条`, () => act('approve', {project: p, all: true}), 'small quiet') : null));
+      }
+      kids.push(h('button', {class: 'item', type: 'button', 'aria-selected': String(sel === key(r)), onclick: () => pick(r)},
+        h('span', {class: 't'}, r.title), h('span', {class: 's'}, flags(r), h('span', null, r.last_seen))));
+    }
+    listEl.replaceChildren(...kids);
+    const cur = listEl.querySelector('[aria-selected="true"]');
+    if (cur) cur.scrollIntoView({block: 'nearest'});
+  }
+  function result() {
+    if (!last) return null;
+    return h('div', {class: 'note ' + (last.ok && !/未写入/.test(last.output) ? 'good' : 'warn')}, h('pre', null, last.output || '完成。'));
+  }
+  function clearReader() {
+    item = null;
+    readEl.replaceChildren(h('div', {class: 'inner muted'}, '正在读取……'));
+  }
+  async function drawReader() {
+    if (!rows.length) {
+      item = null;
+      readEl.replaceChildren(h('div', {class: 'inner'}, result(), h('div', {class: 'empty'}, h('h2', null, '没有待审批的笔记'),
+        h('p', null, '每晚脚本跑完后，新提炼出的笔记会出现在这里。也可以现在手动跑一次。'),
+        h('div', {class: 'row gap'}, h('a', {class: 'btn', href: '#/run'}, '去运行')))));
+      return;
+    }
+    const r = rows.find(x => key(x) === sel), want = sel;
+    if (!r) return;
+    if (!item || key(item) !== sel) clearReader();         // 换了一条：先撤掉上一条的按钮，免得按键落在它身上
+    let got;
+    try { got = await api('/api/pending/item?' + qs({project: r.project, file: r.file})); }
+    catch (e) { if (sel === want) readEl.replaceChildren(h('div', {class: 'inner'}, h('div', {class: 'note bad'}, e.message))); return; }
+    if (sel !== want) return;                              // 等回答的时候已经换到别的条了
+    item = got;
+    if (tab === 'diff' && !item.diff) tab = 'note';
+    const names = [['note', '笔记'], item.diff ? ['diff', '和现有笔记的差异'] : null, ['edit', '改文字']].filter(Boolean);
+    const body = h('div');
+    if (tab === 'note') body.append(...sheet(item));
+    else if (tab === 'diff') body.append(item.diff.length ? diffView(item.diff) : h('p', {class: 'muted'}, '和现有笔记完全一样。'));
+    else body.append(editor(item.text, async text => {
+      try { await api('/api/pending/save', {project: item.project, file: item.file, text}); toast('已保存'); await load(); tab = 'note'; drawList(); drawReader(); }
+      catch (e) { fail(e); }
+    }, '这是待审批的原文，只想改几个字的话直接在这里改，保存后再批准。头部的编号、项目名、日期不要动，批准时会检查。'));
+
+    const warn = [];
+    if (item.faults.length) warn.push(h('div', {class: 'note bad'}, '现在不能批准：', item.faults.join('；'), '。在「改文字」里改好再批准。'));
+    const force = h('input', {type: 'checkbox', id: 'force'}), over = h('input', {type: 'checkbox', id: 'over'});
+    if (item.secrets.length) warn.push(h('div', {class: 'note bad'}, '疑似含有密钥：', item.secrets.map(s => `第 ${s.line} 行（${s.label}）`).join('，'),
+      '。从文字里改掉再批准；确认是误报的话勾上：', h('label', null, ' ', force, ' 这是误报，照常写入')));
+    if (item.stale) warn.push(h('div', {class: 'note bad'}, item.stale, '，直接批准会盖掉那些改动。先看差异，把要保留的内容合并进来，再勾上：',
+      h('label', null, ' ', over, ' 我已经合并好，覆盖现有笔记')));
+    const approve = btn('批准', () => act('approve', {project: item.project, file: item.file, force: force.checked, overwrite: over.checked}), 'primary');
+    approve.id = 'approve';
+    approve.disabled = item.faults.length > 0;
+    const retry = armed('重试', '确认：删掉，下一晚重新提炼', () => act('retry', {project: item.project, file: item.file}));
+    retry.id = 'retry';
+    const reject = armed('拒绝', '确认：删掉，以后不再生成', () => act('reject', {project: item.project, file: item.file}), 'danger');
+    reject.id = 'reject';
+    readEl.replaceChildren(
+      h('div', {class: 'inner'}, result(), tabs(names, tab, k => { tab = k; drawReader(); }), warn, body,
+        h('p', {class: 'muted gap'}, item.local ? '批准后写入 ' : '批准后写入项目仓库，会随仓库一起提交：', h('span', {class: 'mono'}, item.target))),
+      h('div', {class: 'bar row'}, approve, retry, reject,
+        h('div', {class: 'keys'}, h('span', null, h('kbd', null, 'J'), ' ', h('kbd', null, 'K'), ' 换一条'), h('span', null, h('kbd', null, 'A'), ' 批准'),
+          h('span', null, h('kbd', null, 'R'), ' 重试'), h('span', null, h('kbd', null, 'X'), ' 拒绝'), h('span', null, h('kbd', null, 'E'), ' 改文字'))));
+    readEl.scrollTop = 0;
+  }
+  async function act(action, body) {
+    const at = rows.findIndex(x => key(x) === sel);
+    clearReader();                                         // 处理期间不留按钮，不会重复提交
+    try { last = await api('/api/pending/act', {action, ...body}); }
+    catch (e) { fail(e); drawReader(); return; }
+    await load();
+    if (!rows.some(x => key(x) === sel)) {                 // 这一条处理掉了，接着看下一条
+      const next = rows[Math.min(Math.max(at, 0), rows.length - 1)];
+      sel = next ? key(next) : null;
+      tab = 'note';
+      history.replaceState(null, '', next ? `#/review/${encodeURIComponent(next.project)}/${encodeURIComponent(next.file)}` : '#/review');
+    }
+    drawList(); drawReader();
+  }
+  function move(step) {
+    const at = rows.findIndex(x => key(x) === sel), next = rows[at + step];
+    if (next) pick(next);
+  }
+  return {
+    async mount(root, args) {
+      listEl = h('aside', {class: 'list', 'aria-label': '待审批的笔记'});
+      readEl = h('section', {class: 'reader'});
+      root.replaceChildren(h('div', {class: 'split'}, listEl, readEl));
+      last = null;
+      await load();
+      this.update(args);
+    },
+    update(args) {
+      const want = args.length === 2 ? args.join('/') : null;
+      const before = sel;
+      sel = rows.some(r => key(r) === want) ? want : (rows[0] ? key(rows[0]) : null);
+      if (sel !== before) { tab = 'note'; last = null; }
+      drawList(); drawReader();
+    },
+    keys: {j: () => move(1), k: () => move(-1), arrowdown: () => move(1), arrowup: () => move(-1),
+      a: () => { const b = document.getElementById('approve'); if (b && !b.disabled) b.click(); },
+      r: () => document.getElementById('retry')?.click(), x: () => document.getElementById('reject')?.click(),
+      e: () => { if (item) { tab = 'edit'; drawReader(); } }},
+  };
+})();
+
+// ---------- 笔记 ----------
+views.notes = (() => {
+  let data = {rows: [], places: []}, q = '', place = '', status = '', sel = null, tab = 'note', listEl, readEl, timer;
+  const key = r => r.place + '/' + r.file;
+  let asked = 0;
+  async function load() {
+    const mine = ++asked, got = await api('/api/notes?' + qs({q}));
+    if (mine === asked) data = got;                        // 只认最后一次搜索的结果
+  }
+  const shown = () => data.rows.filter(r => (!place || r.place === place) && (!status || (r.status || 'current') === status));
+  function drawList() {
+    const search = h('input', {type: 'search', placeholder: '搜标题、关键词、正文或编号', value: q, 'aria-label': '搜索笔记', oninput: e => {
+      q = e.target.value; clearTimeout(timer);
+      timer = setTimeout(async () => { try { await load(); drawRows(); } catch (err) { fail(err); } }, 250);
+    }});
+    const where = h('select', {'aria-label': '位置', onchange: e => { place = e.target.value; drawRows(); }},
+      h('option', {value: ''}, `全部位置（${data.places.reduce((n, p) => n + p.count, 0)}）`),
+      data.places.map(p => h('option', {value: p.key, selected: p.key === place || null}, `${p.label}（${p.count}）`)));
+    const st = h('select', {'aria-label': '状态', onchange: e => { status = e.target.value; drawRows(); }},
+      [['', '全部状态'], ['current', '有效'], ['superseded', '已被取代'], ['archived', '已归档']].map(([v, l]) => h('option', {value: v, selected: v === status || null}, l)));
+    listEl.replaceChildren(h('header', null, h('h1', null, '已生效的笔记'), h('div', {class: 'filters'}, search, h('div', {class: 'row'}, where, st))), h('div', {id: 'rows'}));
+    drawRows();
+  }
+  function drawRows() {
+    const rows = shown(), box = listEl.querySelector('#rows');
+    if (!rows.length) { box.replaceChildren(h('p', {class: 'empty'}, q ? '没有搜到。换个词试试。' : '这里还没有笔记。批准过的笔记会出现在这里。')); return; }
+    box.replaceChildren(...rows.map(r => h('button', {class: 'item', type: 'button', 'aria-selected': String(sel === key(r)),
+      onclick: () => { location.hash = `#/notes/${encodeURIComponent(r.place)}/${encodeURIComponent(r.file)}`; }},
+      h('span', {class: 't'}, r.title),
+      h('span', {class: 's'}, h('span', null, r.place_label), r.status && !['current', 'active'].includes(r.status) ? h('span', {class: 'chip warn'}, STATUS[r.status] || r.status) : null,
+        r.broken ? h('span', {class: 'chip bad'}, '头部读不出来') : null, h('span', null, r.last_seen)),
+      r.snippet ? h('span', {class: 'snip'}, r.snippet) : null)));
+  }
+  async function drawReader() {
+    if (!sel) { readEl.replaceChildren(h('div', {class: 'empty'}, h('h2', null, '从左边选一条笔记'), h('p', null, '可以按标题、关键词、正文或编号搜索。'))); return; }
+    const [p, f] = sel.split('/'), want = sel;
+    let d;
+    try { d = await api('/api/note?' + qs({place: p, file: f})); }
+    catch (e) { if (sel === want) readEl.replaceChildren(h('div', {class: 'inner'}, h('div', {class: 'note bad'}, e.message))); return; }
+    if (sel !== want) return;
+    const body = h('div');
+    if (tab === 'note') body.append(d.problem ? h('div', {class: 'note bad'}, `头部无法解析：${d.problem}。在「改文字」里修好。`) : '', ...sheet(d));
+    else body.append(editor(d.text, async text => {
+      try { const r = await api('/api/note/save', {place: p, file: f, text}); toast(`已保存，索引已重建，共 ${r.indexed} 条`); await load(); tab = 'note'; drawRows(); drawReader(); }
+      catch (e) { fail(e); }
+    }, '这是已经生效的笔记。把 status 改成 superseded 或 archived，它就不再进索引。保存后索引会自动重建。'));
+    readEl.replaceChildren(h('div', {class: 'inner'}, tabs([['note', '笔记'], ['edit', '改文字']], tab, k => { tab = k; drawReader(); }), body,
+      h('p', {class: 'muted gap mono'}, d.path)));
+    readEl.scrollTop = 0;
+  }
+  return {
+    async mount(root, args) {
+      listEl = h('aside', {class: 'list', 'aria-label': '笔记列表'});
+      readEl = h('section', {class: 'reader'});
+      root.replaceChildren(h('div', {class: 'split'}, listEl, readEl));
+      await load();
+      if (args.length === 1) place = args[0];
+      sel = args.length === 2 ? args.join('/') : null;
+      tab = 'note';
+      drawList(); drawReader();
+    },
+    update(args) {
+      if (args.length === 1) { place = args[0]; sel = null; drawList(); }
+      else sel = args.length === 2 ? args.join('/') : null;
+      tab = 'note';
+      drawRows(); drawReader();
+    },
+  };
+})();
+
+// ---------- 运行 ----------
+views.run = (() => {
+  let poll = null;
+  return {
+    async mount(root) {
+      const page = h('div', {class: 'page'}, h('h1', null, '运行'),
+        h('p', {class: 'lede'}, '每晚脚本会同步两台电脑的会话、清洗、粗筛、提炼，把笔记放进待审批区。它会调用模型，产出在你批准之前不会生效。'));
+      const state = h('p', {class: 'muted'}), live = h('div'), start = btn('现在运行一次', async () => {
+        try { draw(await api('/api/run/start', {})); watch(); } catch (e) { fail(e); }
+      });
+      const draw = s => {
+        start.disabled = s.running;
+        state.textContent = s.running ? '正在运行，可以离开这个页面，回来还能看到进度。'
+          : s.code == null ? '这次打开界面之后还没有从这里运行过。' : s.code === 0 ? '运行完成。' : `运行失败，退出码 ${s.code}。`;
+        live.replaceChildren(s.code == null && !s.running ? '' : logView(s.lines), s.output ? h('pre', {class: 'out'}, s.output) : '');
+        if (!s.running && s.code != null) api('/api/pending').then(d => setQueue(d.rows.length)).catch(() => {});
+      };
+      const watch = () => {
+        clearInterval(poll);
+        poll = setInterval(async () => {
+          try { const s = await api('/api/run/status'); draw(s); if (!s.running) { clearInterval(poll); loadLog(); loadLedger(); } } catch (e) { clearInterval(poll); fail(e); }
+        }, 1500);
+      };
+      page.append(h('h2', null, '每晚脚本'), h('div', {class: 'row'}, start, state), live);
+
+      const out = h('div');
+      const run = async body => {
+        try { const r = await api('/api/cmd', body); out.replaceChildren(h('pre', {class: 'out'}, r.output || '完成。')); } catch (e) { fail(e); }
+      };
+      const idBox = h('input', {type: 'text', placeholder: 'bug-3fa9c21e84b7', 'aria-label': '笔记编号', size: 20});
+      page.append(h('h2', null, '维护'),
+        h('div', {class: 'row'}, btn('核对证据和引用', () => run({name: 'verify'})), btn('重建全部索引', () => run({name: 'reindex'})),
+          btn('生成一个新编号', () => run({name: 'newid'}))),
+        h('form', {class: 'row gap', onsubmit: e => { e.preventDefault(); run({name: 'find', id: idBox.value}); }}, idBox, h('button', {class: 'btn', type: 'submit'}, '按编号找笔记')), out);
+
+      const logBox = h('div'), only = h('input', {type: 'checkbox', id: 'only'});
+      const loadLog = async () => {
+        try {
+          const d = await api('/api/log?n=600');
+          const keep = only.checked ? d.lines.filter(r => ['WARN', 'ERROR', 'FATAL', 'AUDIT', 'SKIP', 'SUMMARY'].includes(r.level)) : d.lines;
+          logBox.replaceChildren(logView(keep.slice(-300).reverse()));
+        } catch (e) { fail(e); }
+      };
+      only.addEventListener('change', loadLog);
+      page.append(h('h2', null, '日志'), h('div', {class: 'row'}, h('label', null, only, ' 只看告警、出错和汇总'), btn('刷新', loadLog, 'small quiet'), h('span', {class: 'muted'}, '最新的在上面')), logBox);
+
+      const ledgerBox = h('div');
+      const loadLedger = async () => {
+        try {
+          const d = await api('/api/ledger');
+          ledgerBox.replaceChildren(d.rows.length ? h('div', {class: 'scroll'}, h('table', null,
+            h('tr', null, h('th', null, '时间'), h('th', null, '结果'), h('th', null, '项目'), h('th', null, '会话'), h('th', null, '产出的笔记')),
+            d.rows.map(r => h('tr', null, h('td', null, r.at.replace('T', ' ')), h('td', null, outcome(r.outcome)), h('td', null, r.project),
+              h('td', {class: 'path'}, r.path), h('td', {class: 'path'}, r.notes.join('，')))))) : h('p', {class: 'muted'}, '台账还是空的。'));
+        } catch (e) { fail(e); }
+      };
+      page.append(h('h2', null, '每段会话的处理结果'), h('p', {class: 'muted'}, '台账里最近 300 条，最新的在上面。未登记的目录和还在进行的会话不记台账。'), ledgerBox);
+      root.replaceChildren(page);
+      const s = await api('/api/run/status');
+      draw(s);
+      if (s.running) watch();
+      loadLog(); loadLedger();
+    },
+    unmount() { clearInterval(poll); },
+  };
+})();
+
+// ---------- 向导 ----------
+views.setup = (() => {
+  let info, step = 'repo', listEl, body;
+  const mark = ok => ok === true ? h('span', {class: 'mark ok'}, '完成') : ok === false ? h('span', {class: 'mark todo'}, '待办') : h('span', {class: 'mark todo'}, '需要你看');
+  function drawList() {
+    listEl.replaceChildren(h('header', null, h('h1', null, '向导'), h('p', {class: 'muted'}, '按顺序做。每一步都可以反复打开。')),
+      h('div', {class: 'steps'}, info.steps.map((s, i) => h('button', {class: 'item', type: 'button', 'aria-selected': String(s.key === step),
+        onclick: () => { location.hash = '#/setup/' + s.key; }}, h('span', {class: 'no'}, i + 1), h('span', {class: 't'}, s.title), mark(s.ok)))));
+  }
+  const checkTable = rows => h('table', null, rows.map(c => h('tr', null, h('td', null, c.name),
+    h('td', null, h('span', {class: 'chip ' + (c.ok ? 'good' : 'bad')}, c.ok ? '好了' : '还缺')), h('td', {class: 'path'}, c.note))));
+  const steps = {
+    async repo(el) {
+      const out = h('div');
+      el.append(h('h1', null, '建仓库'), h('p', {class: 'lede'}, '所有内容放在这台电脑的 memory 目录里，用 git 管版本。原始会话、运行状态和待审批的笔记不进版本库。'),
+        h('h2', null, '现在的状态'), checkTable(info.checks),
+        h('div', {class: 'row gap'}, btn('补上缺的目录和文件', async () => {
+          try { const r = await api('/api/setup/init', {}); info = r.setup; drawList(); body.replaceChildren(); await steps.repo(body);
+            body.querySelector('#did').replaceChildren(h('div', {class: 'note good'}, r.done.length ? h('ul', null, r.done.map(x => h('li', null, x))) : '什么都不缺，没有改动。')); }
+          catch (e) { fail(e); }
+        }), h('span', {class: 'muted'}, '已经有的一律不动，可以反复点。')), h('div', {id: 'did'}), out,
+        info.here !== info.scripts ? h('div', {class: 'note'}, '界面现在是从 ', h('span', {class: 'mono'}, info.here), ' 启动的。补齐之后脚本会复制到 ',
+          h('span', {class: 'mono'}, info.scripts), '，以后从那里启动：', h('code', null, `python3 ${info.scripts}/gui.py`), '，原来那份可以删掉。') : '',
+        h('h2', null, '用得到的命令'), checkTable(info.tools),
+        h('h2', null, '第一次提交由你来做'), h('p', {class: 'muted'}, '确认 .gitignore 已经在位之后再提交。这个仓库不要推到任何托管平台。'),
+        copyBlock(`cd ${info.memory}\ngit add .\ngit commit -m "init"`));
+    },
+    async registry(el) {
+      const d = await api('/api/registry');
+      let rows = d.rows.map(r => ({...r}));
+      const table = h('div');
+      const field = (label, control, cls) => h('label', {class: 'field ' + (cls || '')}, h('span', null, label), control);
+      const cell = (r, k, label, ph) => field(label, h('input', {type: 'text', value: r[k] || '', placeholder: ph || '', oninput: e => { r[k] = e.target.value; }}),
+        k === 'desc' ? 'wide' : k === 'm4' || k === 'm2' ? 'half' : '');
+      const draw = () => table.replaceChildren(...rows.map((r, i) => h('fieldset', {class: 'proj'}, h('div', {class: 'proj-grid'},
+        cell(r, 'name', '项目名', 'example-api'), cell(r, 'category', '类别', '个人 / 工作'),
+        field('状态', h('select', {onchange: e => { r.status = e.target.value; }},
+          [...new Set(['active', 'archived', r.status].filter(Boolean))].map(v => h('option', {value: v, selected: v === r.status || null}, v === 'active' ? 'active（启用）' : v === 'archived' ? 'archived（归档）' : v)))),
+        field('笔记位置', h('select', {onchange: e => { r.location = e.target.value; }},
+          [['', '留空（本地）'], ['本地', '本地'], ['仓库', '仓库（随项目提交）']].map(([v, l]) => h('option', {value: v, selected: v === (r.location || '') || null}, l)))),
+        cell(r, 'desc', '说明', '一句话说明项目做什么'),
+        cell(r, 'm4', 'M4 Pro 路径', '~/code/example-api'), cell(r, 'm2', 'M2 Max 路径', '~/code/example-api，没有就留空')),
+        btn('删掉这个项目', () => { rows.splice(i, 1); draw(); }, 'small quiet'))));
+      draw();
+      const diag = h('div');
+      const drawDiag = list => diag.replaceChildren(list.length ? h('table', null,
+        h('tr', null, ['项目', '每晚脚本会处理吗', '笔记写到哪'].map(x => h('th', null, x))),
+        list.map(r => h('tr', null, h('td', null, r.name),
+          h('td', null, r.enabled ? [h('span', {class: 'chip good'}, '会'), ' ', !r.repo_exists ? h('span', {class: 'chip bad'}, '这台电脑上找不到这个目录') : !r.is_git ? h('span', {class: 'chip warn'}, '不是 git 仓库，记不下 commit') : '']
+            : [h('span', {class: 'chip'}, '不会'), ' ', r.why || '状态不是 active']),
+          h('td', {class: 'path'}, r.enabled ? [r.notes_dir, r.local ? '' : '（随项目仓库提交）'] : '')))) : '');
+      drawDiag(d.rows);
+      el.append(h('h1', null, '登记项目'),
+        h('p', {class: 'lede'}, '每晚脚本靠这张表把会话的工作目录对到项目。没登记的目录不会被处理，补登记后下一次自动补上。先只登记一个最近在写的项目。'),
+        h('div', {class: 'note'}, '「笔记位置」留空就是本地：笔记留在 memory 仓库里。只有明确选「仓库」，批准后的笔记才会进项目仓库的 docs/bugs/ 并随仓库提交。和同事共用的仓库不要选「仓库」。'),
+        table, h('div', {class: 'row gap'}, btn('加一行', () => { rows.push({name: '', desc: '', category: '', status: 'active', m4: '', m2: '', location: ''}); draw(); }, 'quiet'),
+          btn('保存注册表', async () => {
+            try { const r = await api('/api/registry/save', {rows}); rows = r.rows.map(x => ({...x})); draw(); drawDiag(r.rows); toast('已保存'); info = await api('/api/setup'); drawList(); }
+            catch (e) { fail(e); }
+          })),
+        h('h2', null, '保存后的效果'), diag, h('p', {class: 'muted gap mono'}, d.path));
+    },
+    async clean(el) {
+      const d = await api('/api/sessions');
+      const result = h('div');
+      const show = async path => {
+        try {
+          const c = await api('/api/clean?' + qs({path}));
+          const s = c.stats;
+          result.replaceChildren(h('h2', null, '清洗结果'), h('table', {class: 'fields'},
+            [['工作目录', c.cwd || '（会话里没有）', '应该是项目的路径'],
+              ['对到的项目', c.project || h('span', {class: 'chip warn'}, '没有对上，先去登记这个目录'), ''],
+              ['我的发言轮数', s.user_turns, '和你实际发言的次数大致相符才对。明显偏少或是 0，说明清洗函数认不出你的发言'],
+              ['报错信号', s.signals, '报错的工具结果，加上你自己说出了问题的次数'],
+              ['会话所在分支', s.branch || '（没有记录）', '是不是当时所在的分支'],
+              ['涉及的日期', c.dates.join('，') || '（会话里没有时间）', ''],
+              ['每晚脚本会怎么处理', h('span', {class: 'chip ' + (c.verdict === 'pass' ? 'good' : 'warn')}, c.why), ''],
+            ].map(([k, v, tip]) => h('tr', null, h('th', null, k), h('td', null, v), h('td', {class: 'tip'}, tip)))),
+            h('h2', null, `清洗后的文字（共 ${c.chars} 字，显示开头）`),
+            h('p', {class: 'muted'}, '看两点：你的话是不是标成了「用户」，报错的工具结果有没有标成「含报错」。'), h('pre', {class: 'out'}, c.preview || '（清洗后没有内容）'));
+          result.scrollIntoView({block: 'start'});
+        } catch (e) { fail(e); }
+      };
+      el.append(h('h1', null, '验证清洗'),
+        h('p', {class: 'lede'}, '清洗函数把会话文件压成模型能读的文字。它是照着一个云端环境里的会话文件写的，还没有在你自己的会话上验证过。挑一段你记得内容的会话点开看看。'),
+        d.rows.length ? h('table', null, h('tr', null, ['最后改动', '项目', '工作目录', '大小', ''].map(x => h('th', null, x))),
+          d.rows.map(r => h('tr', null, h('td', null, r.mtime), h('td', null, r.project || h('span', {class: 'chip'}, '未登记')), h('td', {class: 'path'}, r.cwd),
+            h('td', {class: 'num'}, `${Math.max(1, Math.round(r.size / 1024))} KB`), h('td', null, btn('清洗看看', () => show(r.path), 'small')))))
+          : h('div', {class: 'note warn'}, `在 ${d.dir} 下没有找到会话文件。`), result);
+    },
+    async trial(el) {
+      const days = h('input', {type: 'number', min: 1, max: 3650, value: 14, 'aria-label': '天数', size: 5});
+      const est = h('div'), confirm = h('input', {type: 'checkbox', id: 'sure'});
+      const estimate = async () => {
+        try {
+          const e = await api('/api/trial/estimate?' + qs({days: days.value}));
+          const c = e.counts, names = Object.keys(e.by_project);
+          est.replaceChildren(h('div', {class: 'note'}, `最近 ${e.days} 天，这台电脑上有 ${e.total} 段会话有改动。`,
+            e.scanned < e.total ? `只统计了最新的 ${e.scanned} 段。` : '',
+            ` 其中 ${c.pass || 0} 段会交给小模型粗筛（每段至少调用一次模型，通过的再调用一次强模型），${c.filtered || 0} 段会被规则筛掉，${c.waiting || 0} 段还在进行，${c.unregistered || 0} 段的目录没有登记。`),
+            names.length ? h('table', null, h('tr', null, ['项目', '交给小模型', '规则筛掉', '还在进行'].map((x, i) => h('th', {class: i ? 'num' : ''}, x))),
+              names.map(n => h('tr', null, h('td', null, n), ['pass', 'filtered', 'waiting'].map(k => h('td', {class: 'num'}, e.by_project[n][k]))))) : '',
+            e.unregistered.length ? h('details', {class: 'fields'}, h('summary', null, '没有登记的目录'), h('table', null, e.unregistered.map(([p, n]) => h('tr', null, h('td', {class: 'path'}, p), h('td', {class: 'num'}, n))))) : '');
+        } catch (err) { fail(err); }
+      };
+      const since = info.since ? new Date(info.since * 1000).toLocaleString('zh-CN') : '还没有设置（第一次运行时默认从一天前开始）';
+      const p = await api('/api/prompts');
+      const areas = {};
+      const promptBox = (name, label) => {
+        areas[name] = h('textarea', {rows: 14, spellcheck: 'false', 'aria-label': label});
+        areas[name].value = p[name];
+        return h('details', {class: 'fields'}, h('summary', null, label), areas[name], h('div', {class: 'row gap'}, btn('保存这份提示词', async () => {
+          try { await api('/api/prompt/save', {name, text: areas[name].value}); toast('已保存'); } catch (e) { fail(e); }
+        }, 'small')));
+      };
+      const word = h('input', {type: 'text', placeholder: '输入「重置」', 'aria-label': '确认文字', size: 10});
+      el.append(h('h1', null, '试提炼'),
+        h('p', {class: 'lede'}, '正式定时运行之前，先拿一批历史会话跑一遍，看提炼出来的笔记你自己愿不愿意读。做法是把起始时间往回拨，再手动运行一次每晚脚本。产出只进待审批区。'),
+        h('h2', null, '1. 估一下会处理多少'), h('div', {class: 'row'}, '往回', days, '天', btn('估算', estimate)), est,
+        h('h2', null, '2. 把起始时间拨回去'), h('p', {class: 'muted'}, `现在的起始时间：${since}。台账里有 ${info.ledger} 条记录。`),
+        h('div', {class: 'row gap'}, btn('把起始时间设到这么多天前', async () => {
+          try { info = await api('/api/trial/since', {days: Number(days.value), confirm: confirm.checked}); toast('起始时间已更新'); body.replaceChildren(); await steps.trial(body); drawList(); }
+          catch (e) { fail(e); }
+        }), info.ledger ? h('label', null, confirm, ' 我知道这会让下次运行处理更早的会话') : ''),
+        h('h2', null, '3. 运行，然后去审批里看结果'), h('div', {class: 'row'}, h('a', {class: 'btn', href: '#/run'}, '去运行'), h('a', {class: 'btn quiet', href: '#/review'}, '去审批')),
+        h('p', {class: 'muted gap'}, '对照三个问题：有没有漏掉你自己记得的 bug；笔记的根因是解释了机制，还是只复述了改动；索引里那一行，不了解上下文的人能不能看懂。'),
+        h('h2', null, '4. 调提示词'), promptBox('triage', '粗筛提示词 triage.md'), promptBox('distill-bug', '提炼提示词 distill-bug.md'),
+        h('h2', null, '5. 改完之后重跑'), h('p', {class: 'muted'}, '重置会删掉台账和所有待审批的笔记，下次运行把起始时间之后的会话全部重新处理。已经批准的笔记和原始会话不受影响。只在试提炼阶段用。'),
+        h('div', {class: 'row gap'}, word, armed('重置试提炼', '确认：删掉台账和待审批的笔记', async () => {
+          try { const r = await api('/api/trial/reset', {confirm: word.value}); info = r.setup; toast(`已重置，删掉了 ${r.removed} 条待审批的笔记`); setQueue(0); body.replaceChildren(); await steps.trial(body); drawList(); }
+          catch (e) { fail(e); }
+        }, 'danger')));
+    },
+    async schedule(el) {
+      const hour = h('input', {type: 'number', min: 0, max: 23, value: 23, 'aria-label': '时', size: 3}), minute = h('input', {type: 'number', min: 0, max: 59, value: 30, 'aria-label': '分', size: 3});
+      const box = h('div');
+      let asked = 0;
+      const draw = d => box.replaceChildren(
+        d.exists ? h('div', {class: 'note good'}, '配置文件已经在 ', h('span', {class: 'mono'}, d.path)) : h('div', {class: 'note'}, '配置文件还没有写到 ', h('span', {class: 'mono'}, d.path)),
+        d.claude ? '' : h('div', {class: 'note warn'}, '在当前环境里找不到 claude 命令。定时任务的 PATH 是写死在配置里的，里面要有 claude 所在的目录，否则每晚脚本会失败。'),
+        d.mac ? '' : h('div', {class: 'note warn'}, '这台电脑不是 macOS，launchd 用不了。下面的内容只供参考。'),
+        h('h2', null, '配置内容'), copyBlock(d.text),
+        h('div', {class: 'row'}, btn(d.exists ? '用上面的内容覆盖配置文件' : '写入配置文件', async () => {
+          try {
+            const mine = ++asked, d = await api('/api/schedule/write', {hour: Number(hour.value), minute: Number(minute.value)});
+            if (mine === asked) draw(d);
+            toast('已写入'); info = await api('/api/setup'); drawList();
+          } catch (e) { fail(e); }
+        })),
+        h('h2', null, '加载和手动触发'), h('p', {class: 'muted'}, '这两条要你在终端里执行，界面不替你加载。改过配置文件之后，先卸载再加载。'),
+        copyBlock(`${d.load}\n${d.kick}   # 立即跑一次`), h('p', {class: 'muted'}, '卸载：'), copyBlock(d.unload));
+      const refresh = async () => {
+        try { const mine = ++asked, d = await api('/api/schedule?' + qs({hour: hour.value, minute: minute.value})); if (mine === asked) draw(d); } catch (e) { fail(e); }
+      };
+      hour.addEventListener('change', refresh); minute.addEventListener('change', refresh);
+      el.append(h('h1', null, '定时运行'),
+        h('p', {class: 'lede'}, '用 macOS 的 launchd 每晚触发一次。电脑当时在睡眠的话，唤醒后会补跑。先连续观察 3 到 5 天，每天早上审批，这几天不要加指针。'),
+        h('div', {class: 'row gap'}, '每天', hour, '点', minute, '分'), box);
+      await refresh();
+    },
+    async pointers(el) {
+      const d = await api('/api/pointers');
+      el.append(h('h1', null, '加指针'),
+        h('p', {class: 'lede'}, '指针是写在配置文件里的几行话，告诉 Claude Code 和 Codex 遇到报错时去读哪份索引。笔记质量稳定之后再加。界面不替你改配置文件，复制后自己贴进去。'),
+        h('h2', null, '现在的状态'), h('table', null, h('tr', null, ['工具', '配置文件', '项目指针', '全局指针'].map(x => h('th', null, x))),
+          d.files.map(f => h('tr', null, h('td', null, f.tool), h('td', {class: 'path'}, f.path + (f.exists ? '' : '（还没有这个文件）')),
+            h('td', null, h('span', {class: 'chip ' + (f.local ? 'good' : '')}, f.local ? '已加' : '没有')), h('td', null, h('span', {class: 'chip ' + (f.global ? 'good' : '')}, f.global ? '已加' : '没有'))))),
+        h('h2', null, '项目指针：贴进用户级配置'), h('p', {class: 'muted'}, '每个笔记留在本地的项目一行。新登记了项目就重新复制一遍，替换掉旧的。'),
+        d.local ? copyBlock(d.local) : h('div', {class: 'note'}, '注册表里没有笔记留在本地的项目。'),
+        h('h2', null, '全局指针：贴进用户级配置'), h('p', {class: 'muted'}, '项目里查不到，或者问题出在工具链和环境这一层时，再查跨项目的索引。'), copyBlock(d.global),
+        h('h2', null, '随仓库提交的项目：贴进仓库的 CLAUDE.md 和 AGENTS.md'),
+        h('p', {class: 'muted'}, d.repo_projects.length ? `注册表里选了「仓库」的项目：${d.repo_projects.join('，')}。` : '注册表里没有选「仓库」的项目，这一段用不到。'), copyBlock(d.repo));
+    },
+  };
+  async function drawBody() {
+    body.replaceChildren();
+    try { await steps[step](body); } catch (e) { body.append(h('div', {class: 'note bad'}, e.message)); }
+  }
+  return {
+    async mount(root, args) {
+      listEl = h('aside', {class: 'list', 'aria-label': '向导的步骤'});
+      body = h('div', {class: 'page'});
+      root.replaceChildren(h('div', {class: 'split'}, listEl, h('section', {class: 'reader'}, body)));
+      info = await api('/api/setup');
+      document.getElementById('where').textContent = info.memory;
+      if (!args[0]) step = (info.steps.find(s => s.ok === false) || info.steps[0]).key;
+      await this.update(args);
+    },
+    async update(args) {
+      if (args[0] && steps[args[0]]) step = args[0];
+      drawList();
+      await drawBody();
+    },
+  };
+})();
+
+// ---------- 路由 ----------
+let current = null;
+async function route() {
+  const [name, ...args] = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
+  const view = views[name] ? name : 'overview';
+  document.querySelectorAll('#rail a').forEach(a => a.dataset.view === view ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
+  try {
+    if (current === view && views[view].update) { await views[view].update(args); return; }
+    if (current && views[current].unmount) views[current].unmount();
+    current = view;
+    main.replaceChildren(h('div', {class: 'page muted'}, '正在读取……'));
+    await views[view].mount(main, args);
+  } catch (e) {
+    main.replaceChildren(h('div', {class: 'page'}, h('div', {class: 'note bad'}, e.message)));
+  }
+}
+window.addEventListener('hashchange', route);
+document.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  const fn = (views[current] && views[current].keys || {})[e.key.toLowerCase()];
+  if (fn) { e.preventDefault(); fn(); }
+});
+api('/api/pending').then(d => setQueue(d.rows.length)).catch(() => {});
+api('/api/setup').then(d => { document.getElementById('where').textContent = d.memory; }).catch(() => {});
+route();
+</script>
+</body>
+</html>

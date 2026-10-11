@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.DS_Store
+# 测试时生成的临时数据、截图和进程号
+tests/.work/
+tests/.shots/
+tests/.gui.pids

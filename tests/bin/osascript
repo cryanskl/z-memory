@@ -1,0 +1,2 @@
+#!/bin/sh
+echo "NOTIFY: $2" >> "$T/notify.log"

@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+import sys, json, os
+T = os.environ["T"]; args = sys.argv; stdin = sys.stdin.read()
+kind = "triage" if "你在帮我筛选" in args[2] else "distill"
+open(T + "/calls.log", "a").write(json.dumps({"kind": kind, "sentinel": args[2].startswith("[memory-nightly]\n"), "args": args[3:], "cwd": os.getcwd(), "stdin": stdin}, ensure_ascii=False) + "\n")
+if kind == "triage":
+    res = '好的，判断如下 {"has_bug": %s, "reason": "x"}' % open(T + "/tri").read().strip()
+else:
+    res = open(T + "/scen").read()
+print(json.dumps({"type": "result", "result": res}))
